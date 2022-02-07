@@ -52,7 +52,128 @@ class MOENCHTangoTwoDController(TwoDController, Referable):
     def ReadOne(self, axis):
         """Get the specified counter value"""
         # TODO: unclear what need to return in case of reference
-        return np.zeros(400, 400)
+        # LAVUE imageSource.py, line 1455
+        if self._configuration:
+            try:
+                response = self.__get()
+                if response.ok:
+                    mdata = ""
+                    name = self._configuration
+                    data = response.content
+                    if str(data[:10]) in ["###CBF: VE", "b'###CBF: VE'"]:
+                        # print("[cbf source module]::metadata", name)
+                        img = None
+                        if FABIO11:
+                            try:
+                                fimg = fabio.open(BytesIO(bytes(data)))
+                                img = fimg.data
+                                mdata = imageFileHandler.CBFLoader().metadata(
+                                    fimg.header.get("_array_data.header_contents")
+                                )
+                            except Exception as e:
+                                # print(str(e))
+                                logger.warning(str(e))
+                                img = None
+                        if img is None:
+                            try:
+                                nimg = np.frombuffer(data[:], dtype=np.uint8)
+                            except Exception:
+                                nimg = np.fromstring(data[:], dtype=np.uint8)
+                            img = imageFileHandler.CBFLoader().load(nimg)
+                            mdata = imageFileHandler.CBFLoader().metadata(nimg)
+
+                        if img is None:
+                            return None, None, None
+                        if hasattr(img, "size") and img.size == 0:
+                            return None, None, None
+                        return (
+                            np.transpose(img),
+                            "%s (%s)" % (name, currenttime()),
+                            mdata,
+                        )
+                    else:
+                        # print("[tif source module]::metadata", name)
+                        if PILLOW and not self.__tiffloader:
+                            try:
+                                img = np.array(PIL.Image.open(BytesIO(bytes(data))))
+                            except Exception:
+                                try:
+                                    img = imageFileHandler.TIFLoader().load(
+                                        np.frombuffer(data[:], dtype=np.uint8)
+                                    )
+                                except Exception:
+                                    img = imageFileHandler.TIFLoader().load(
+                                        np.fromstring(data[:], dtype=np.uint8)
+                                    )
+                                self.__tiffloader = True
+                            if img is None:
+                                return None, None, None
+                            if hasattr(img, "size") and img.size == 0:
+                                return None, None, None
+                            return (
+                                np.transpose(img),
+                                "%s (%s)" % (name, currenttime()),
+                                "",
+                            )
+                        else:
+                            try:
+                                img = imageFileHandler.TIFLoader().load(
+                                    np.frombuffer(data[:], dtype=np.uint8)
+                                )
+                            except Exception:
+                                img = imageFileHandler.TIFLoader().load(
+                                    np.fromstring(data[:], dtype=np.uint8)
+                                )
+                            if img is None:
+                                return None, None, None
+                            if hasattr(img, "size") and img.size == 0:
+                                return None, None, None
+                            return (
+                                np.transpose(img),
+                                "%s (%s)" % (name, currenttime()),
+                                "",
+                            )
+                else:
+                    logger.info("HTTPSource.getData: %s" % str(response.content))
+            except Exception as e:
+                # print(str(e))
+                logger.warning(str(e))
+                return str(e), "__ERROR__", ""
+            else:
+                if str(response.text) == "Image not available":
+                    return str(response.text), None, None
+                if "File not found" in str(response.text):
+                    return str(response.text), None, None
+                else:
+                    return str(response.text), "__ERROR__", None
+        return "No url defined", "__ERROR__", None
+
+    # @debugmethod
+    def __get(self):
+        """get response
+
+        :returns: response object
+        :rtype: :class:`requests.Response`
+        """
+        if self.__header:
+            try:
+                return requests.get(
+                    self._configuration,
+                    headers=self.__header,
+                    timeout=(self._timeout / 1000.0 if self._timeout else None),
+                )
+            except AttributeError:
+                return requests.get(self._configuration, headers=self.__header)
+        else:
+            try:
+                return requests.get(
+                    self._configuration,
+                    timeout=(self._timeout / 1000.0 if self._timeout else None),
+                )
+            except AttributeError:
+                return requests.get(self._configuration)
+
+        return np.zeros([400, 400])
 
     def RefOne(self, axis):
         return self.control_device.tiff_fullpath_last
