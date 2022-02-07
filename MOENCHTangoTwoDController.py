@@ -106,12 +106,12 @@ class MOENCHTangoTwoDController(TwoDController, Referable):
     def StopOne(self, axis):
         """Stop the specified counter"""
         # FIXME: pending https://github.com/MBI-Div-B/pytango-moenchDetector/issues/13
-        pass
+        self.acquire_device.stop_acquire()
 
     def AbortOne(self, axis):
         """Abort the specified counter"""
         # FIXME: pending https://github.com/MBI-Div-B/pytango-moenchDetector/issues/13
-        pass
+        self.acquire_device.stop_acquire()
 
     # FIXME: check the first FIXME:
     # def isSavingEnabled(self, axis):
