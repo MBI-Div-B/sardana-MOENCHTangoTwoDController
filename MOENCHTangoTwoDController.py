@@ -1,6 +1,7 @@
 from sardana.pool.controller import TwoDController, Referable
 from tango import DeviceProxy, DevState
 import numpy as np
+from lavuelib.imageSource import HTTPSource
 
 
 class MOENCHTangoTwoDController(TwoDController, Referable):
@@ -17,19 +18,21 @@ class MOENCHTangoTwoDController(TwoDController, Referable):
             DefaultValue: "rsxs/moenchAcquire/bchip286",
         },
     }
-    axis_attributes = {
-        "SavingEnabled": {
-            Type: bool,
-            FGet: "isSavingEnabled",
-            FSet: "setSavingEnabled",
-            Description: (
-                "Enable/disable saving of images in HDF5 files."
-                " Use with care in high demanding (fast)"
-                " acquisitions. Trying to save at high rate may"
-                " hang the acquisition process."
-            ),
-        }
-    }
+    _next_httppath_tiff = ""
+    # FIXME: FGet and Fset fields are not available for axis_attributes
+    # axis_attributes = {
+    #     "SavingEnabled": {
+    #         Type: bool,
+    #         FGet: "isSavingEnabled",
+    #         FSet: "setSavingEnabled",
+    #         Description: (
+    #             "Enable/disable saving of images in HDF5 files."
+    #             " Use with care in high demanding (fast)"
+    #             " acquisitions. Trying to save at high rate may"
+    #             " hang the acquisition process."
+    #         ),
+    #     }
+    # }
 
     def __init__(self, inst, props, *args, **kwargs):
         """Constructor"""
@@ -53,127 +56,16 @@ class MOENCHTangoTwoDController(TwoDController, Referable):
         """Get the specified counter value"""
         # TODO: unclear what need to return in case of reference
         # LAVUE imageSource.py, line 1455
-        if self._configuration:
-            try:
-                response = self.__get()
-                if response.ok:
-                    mdata = ""
-                    name = self._configuration
-                    data = response.content
-                    if str(data[:10]) in ["###CBF: VE", "b'###CBF: VE'"]:
-                        # print("[cbf source module]::metadata", name)
-                        img = None
-                        if FABIO11:
-                            try:
-                                fimg = fabio.open(BytesIO(bytes(data)))
-                                img = fimg.data
-                                mdata = imageFileHandler.CBFLoader().metadata(
-                                    fimg.header.get("_array_data.header_contents")
-                                )
-                            except Exception as e:
-                                # print(str(e))
-                                logger.warning(str(e))
-                                img = None
-                        if img is None:
-                            try:
-                                nimg = np.frombuffer(data[:], dtype=np.uint8)
-                            except Exception:
-                                nimg = np.fromstring(data[:], dtype=np.uint8)
-                            img = imageFileHandler.CBFLoader().load(nimg)
-                            mdata = imageFileHandler.CBFLoader().metadata(nimg)
-
-                        if img is None:
-                            return None, None, None
-                        if hasattr(img, "size") and img.size == 0:
-                            return None, None, None
-                        return (
-                            np.transpose(img),
-                            "%s (%s)" % (name, currenttime()),
-                            mdata,
-                        )
-                    else:
-                        # print("[tif source module]::metadata", name)
-                        if PILLOW and not self.__tiffloader:
-                            try:
-                                img = np.array(PIL.Image.open(BytesIO(bytes(data))))
-                            except Exception:
-                                try:
-                                    img = imageFileHandler.TIFLoader().load(
-                                        np.frombuffer(data[:], dtype=np.uint8)
-                                    )
-                                except Exception:
-                                    img = imageFileHandler.TIFLoader().load(
-                                        np.fromstring(data[:], dtype=np.uint8)
-                                    )
-                                self.__tiffloader = True
-                            if img is None:
-                                return None, None, None
-                            if hasattr(img, "size") and img.size == 0:
-                                return None, None, None
-                            return (
-                                np.transpose(img),
-                                "%s (%s)" % (name, currenttime()),
-                                "",
-                            )
-                        else:
-                            try:
-                                img = imageFileHandler.TIFLoader().load(
-                                    np.frombuffer(data[:], dtype=np.uint8)
-                                )
-                            except Exception:
-                                img = imageFileHandler.TIFLoader().load(
-                                    np.fromstring(data[:], dtype=np.uint8)
-                                )
-                            if img is None:
-                                return None, None, None
-                            if hasattr(img, "size") and img.size == 0:
-                                return None, None, None
-                            return (
-                                np.transpose(img),
-                                "%s (%s)" % (name, currenttime()),
-                                "",
-                            )
-                else:
-                    logger.info("HTTPSource.getData: %s" % str(response.content))
-            except Exception as e:
-                # print(str(e))
-                logger.warning(str(e))
-                return str(e), "__ERROR__", ""
-            else:
-                if str(response.text) == "Image not available":
-                    return str(response.text), None, None
-                if "File not found" in str(response.text):
-                    return str(response.text), None, None
-                else:
-                    return str(response.text), "__ERROR__", None
-        return "No url defined", "__ERROR__", None
-
-    # @debugmethod
-    def __get(self):
-        """get response
-
-        :returns: response object
-        :rtype: :class:`requests.Response`
-        """
-        if self.__header:
-            try:
-                return requests.get(
-                    self._configuration,
-                    headers=self.__header,
-                    timeout=(self._timeout / 1000.0 if self._timeout else None),
-                )
-            except AttributeError:
-                return requests.get(self._configuration, headers=self.__header)
-        else:
-            try:
-                return requests.get(
-                    self._configuration,
-                    timeout=(self._timeout / 1000.0 if self._timeout else None),
-                )
-            except AttributeError:
-                return requests.get(self._configuration)
-
-        return np.zeros([400, 400])
+        httpsource = HTTPSource()
+        isDownloaded = False
+        # next httppath is updated direct before acquire
+        capture_url_to_read = self._next_httppath_tiff
+        httpsource.setConfiguration(capture_url_to_read)
+        img, timestamp, field = httpsource.getData()
+        if timestamp == "__ERROR__":
+            # if image is not available return empty frame
+            img = np.zeros([400, 400])
+        return img
 
     def RefOne(self, axis):
         return self.control_device.tiff_fullpath_last
@@ -195,7 +87,7 @@ class MOENCHTangoTwoDController(TwoDController, Referable):
             # according to https://www.sardana-controls.org/devel/howto_controllers/howto_0dcontroller.html?highlight=stateone need to be set to MOVING while acquiring
             acquire_state = DevState.MOVING
             tup = (acquire_state, "Camera acquiring")
-        return acquire_state, "Counter is acquiring or not"
+        return tup
 
     def PrepareOne(self, axis, value, repetitions, latency, nb_starts):
         # set exporsure time of GE cam
@@ -206,6 +98,8 @@ class MOENCHTangoTwoDController(TwoDController, Referable):
 
     def StartOne(self, axis, value=None):
         """acquire the specified counter"""
+        # update the local variable direct before acquire
+        self._next_httppath_tiff = self.control_device.tiff_httppath_next
         self.acquire_device.acquire()
         return
 
@@ -219,9 +113,10 @@ class MOENCHTangoTwoDController(TwoDController, Referable):
         # FIXME: pending https://github.com/MBI-Div-B/pytango-moenchDetector/issues/13
         pass
 
-    def isSavingEnabled(self, axis):
-        # TODO: check if a zmqfreq turn off is required
-        return self.control_device.filewrite
+    # FIXME: check the first FIXME:
+    # def isSavingEnabled(self, axis):
+    #     # TODO: check if a zmqfreq turn off is required
+    #     return self.control_device.filewrite
 
-    def setSavingEnabled(self, axis, value):
-        self.control_device.filewrite = bool(value)
+    # def setSavingEnabled(self, axis, value):
+    #     self.control_device.filewrite = bool(value)
