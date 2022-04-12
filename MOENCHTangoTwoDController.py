@@ -189,8 +189,14 @@ class MOENCHTangoTwoDController(TwoDController, Referable):
         return tup
 
     def PrepareOne(self, axis, value, repetitions, latency, nb_starts):
-        # set exporsure time of GE cam
-        self.control_device.exposure = float(value)
+        """
+        value is a exposure in sec
+        we need to set only up amount of triggers, TRIGGER_EXPOSURE mode and only 1 frame per trigger
+        detectormode will not be changed
+        """
+        self.control_device.timing_mode = self.TimingMode.TRIGGER_EXPOSURE
+        self.control_device.frames = 1
+        self.control_device.triggers = int(value * 100)
 
     def LoadOne(self, axis, value, repetitions, latency):
         pass
