@@ -149,9 +149,8 @@ class MOENCHTangoTwoDController(TwoDController, Referable):
 
     def __init__(self, inst, props, *args, **kwargs):
         """Constructor"""
-        print("test")
         TwoDController.__init__(self, inst, props, *args, **kwargs)
-        print("MOENCH Tango Initialization ...")
+        print("MOENCHTangoTwoDController Initialization ...")
         self.control_device = DeviceProxy("rsxs/moenchControl/bchip286")
         print("Ping device...")
         print("SUCCESS")
@@ -165,10 +164,15 @@ class MOENCHTangoTwoDController(TwoDController, Referable):
 
     def ReadOne(self, axis):
         """Get the specified counter value"""
-        print(f"Called ReadOne with the last path: {self.control_device.tiff_fullpath_last}")
+        print(
+            f"Called ReadOne with the last path: {self.control_device.tiff_fullpath_last}"
+        )
         return self.control_device.sum_image_last
 
     def RefOne(self, axis):
+        print(
+            f"Called RefOne with the last path: {self.control_device.tiff_fullpath_last}"
+        )
         return self.control_device.tiff_fullpath_last
 
     def SetAxisPar(self, axis, parameter, value):
@@ -186,6 +190,7 @@ class MOENCHTangoTwoDController(TwoDController, Referable):
         elif acquire_state == DevState.RUNNING:
             # according to https://www.sardana-controls.org/devel/howto_controllers/howto_0dcontroller.html?highlight=stateone need to be set to MOVING while acquiring
             tup = (DevState.MOVING, "Camera acquiring")
+        print(f"Called StateOne {tup}")
         return tup
 
     def PrepareOne(self, axis, value, repetitions, latency, nb_starts):
@@ -199,7 +204,7 @@ class MOENCHTangoTwoDController(TwoDController, Referable):
         print("Set trigger to TRIGGER_EXPOSURE")
         self.control_device.timing_mode = self.TimingMode.TRIGGER_EXPOSURE
         print("Set frames per trigger to 1")
-        self.control_device.frames = 1 # crashes here
+        self.control_device.frames = 1  # crashes here
         print(f"Set triggers to {triggers}")
         self.control_device.triggers = triggers
 
@@ -208,17 +213,21 @@ class MOENCHTangoTwoDController(TwoDController, Referable):
 
     def StartOne(self, axis, value=None):
         """acquire the specified counter"""
+        print("Called StartOne")
         self.control_device.start_acquire()
         sleep(0.75)
 
     def StopOne(self, axis):
         """Stop the specified counter"""
+        print("Called StopOne")
         self.control_device.stop_acquire()
 
     def AbortOne(self, axis):
         """Abort the specified counter"""
+        print("Called AbortOne")
         self.control_device.stop_acquire()
 
     def GetAxisPar(self, axis, par):
+        print("Called GetAxisPar")
         if par == "shape":
-            return [400,400]
+            return [400, 400]
