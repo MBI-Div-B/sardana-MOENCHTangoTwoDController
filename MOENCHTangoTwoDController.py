@@ -4,6 +4,7 @@ import tango
 from tango import DeviceProxy, DevState
 import numpy as np
 from enum import Enum, IntEnum
+from time import sleep
 
 # ReadOnly = DataAccess.ReadOnly
 # ReadWrite = DataAccess.ReadWrite
@@ -164,6 +165,7 @@ class MOENCHTangoTwoDController(TwoDController, Referable):
 
     def ReadOne(self, axis):
         """Get the specified counter value"""
+        print(f"Called ReadOne with the last path: {self.control_device.tiff_fullpath_last}")
         return self.control_device.sum_image_last
 
     def RefOne(self, axis):
@@ -174,7 +176,7 @@ class MOENCHTangoTwoDController(TwoDController, Referable):
 
     def StateOne(self, axis):
         """Get the specified counter state"""
-        acquire_state = self.control_device.detector_status
+        acquire_state = self.control_device.state()
         if acquire_state == DevState.ON:
             tup = (acquire_state, "Camera ready")
         elif acquire_state == DevState.FAULT:
@@ -183,8 +185,7 @@ class MOENCHTangoTwoDController(TwoDController, Referable):
             tup = (DevState.MOVING, "Camera is waiting for trigger")
         elif acquire_state == DevState.RUNNING:
             # according to https://www.sardana-controls.org/devel/howto_controllers/howto_0dcontroller.html?highlight=stateone need to be set to MOVING while acquiring
-            acquire_state = DevState.MOVING
-            tup = (acquire_state, "Camera acquiring")
+            tup = (DevState.MOVING, "Camera acquiring")
         return tup
 
     def PrepareOne(self, axis, value, repetitions, latency, nb_starts):
@@ -193,11 +194,12 @@ class MOENCHTangoTwoDController(TwoDController, Referable):
         we need to set only up amount of triggers, TRIGGER_EXPOSURE mode and only 1 frame per trigger
         detectormode will not be changed
         """
+        sleep(0.3)
         triggers = int(value * 100)
         print("Set trigger to TRIGGER_EXPOSURE")
         self.control_device.timing_mode = self.TimingMode.TRIGGER_EXPOSURE
         print("Set frames per trigger to 1")
-        self.control_device.frames = 1
+        self.control_device.frames = 1 # crashes here
         print(f"Set triggers to {triggers}")
         self.control_device.triggers = triggers
 
@@ -207,6 +209,7 @@ class MOENCHTangoTwoDController(TwoDController, Referable):
     def StartOne(self, axis, value=None):
         """acquire the specified counter"""
         self.control_device.start_acquire()
+        sleep(0.75)
 
     def StopOne(self, axis):
         """Stop the specified counter"""
