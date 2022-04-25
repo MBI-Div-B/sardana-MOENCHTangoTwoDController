@@ -6,6 +6,9 @@ import numpy as np
 from enum import Enum, IntEnum
 from time import sleep
 
+from sardana import State
+
+
 # ReadOnly = DataAccess.ReadOnly
 # ReadWrite = DataAccess.ReadWrite
 
@@ -150,10 +153,10 @@ class MOENCHTangoTwoDController(TwoDController, Referable):
     def __init__(self, inst, props, *args, **kwargs):
         """Constructor"""
         TwoDController.__init__(self, inst, props, *args, **kwargs)
-        print("MOENCHTangoTwoDController Initialization ...")
+        self._log.debug("MOENCHTangoTwoDController Initialization ...")
         self.control_device = DeviceProxy("rsxs/moenchControl/bchip286")
-        print("Ping device...")
-        print("SUCCESS")
+        self._log.debug("Ping device...")
+        self._log.debug("SUCCESS")
         self._axes = {}
 
     def AddDevice(self, axis):
@@ -164,13 +167,13 @@ class MOENCHTangoTwoDController(TwoDController, Referable):
 
     def ReadOne(self, axis):
         """Get the specified counter value"""
-        print(
+        self._log.debug(
             f"Called ReadOne with the last path: {self.control_device.tiff_fullpath_last}"
         )
         return self.control_device.sum_image_last
 
     def RefOne(self, axis):
-        print(
+        self._log.debug(
             f"Called RefOne with the last path: {self.control_device.tiff_fullpath_last}"
         )
         return self.control_device.tiff_fullpath_last
@@ -180,18 +183,20 @@ class MOENCHTangoTwoDController(TwoDController, Referable):
 
     def StateOne(self, axis):
         """Get the specified counter state"""
+        self._log.debug(f"Called StateOne")
         acquire_state = self.control_device.state()
+        self._log.debug(f"Acquire state is {acquire_state}")
         if acquire_state == DevState.ON:
             tup = (acquire_state, "Camera ready")
         elif acquire_state == DevState.FAULT:
             tup = (acquire_state, "Camera in FAULT state")
         elif acquire_state == DevState.STANDBY:
             tup = (DevState.MOVING, "Camera is waiting for trigger")
-        elif acquire_state == DevState.RUNNING:
-            # according to https://www.sardana-controls.org/devel/howto_controllers/howto_0dcontroller.html?highlight=stateone need to be set to MOVING while acquiring
+        elif acquire_state == DevState.MOVING or acquire_state == DevState.RUNNING:
             tup = (DevState.MOVING, "Camera acquiring")
-        print(f"Called StateOne {tup}")
+        self._log.debug(f"tup = {tup}")
         return tup
+        
 
     def PrepareOne(self, axis, value, repetitions, latency, nb_starts):
         """
@@ -199,35 +204,39 @@ class MOENCHTangoTwoDController(TwoDController, Referable):
         we need to set only up amount of triggers, TRIGGER_EXPOSURE mode and only 1 frame per trigger
         detectormode will not be changed
         """
-        sleep(0.3)
+        self._log.debug("Called PrepareOne")
         triggers = int(value * 100)
-        print("Set trigger to TRIGGER_EXPOSURE")
+        self._log.debug("Set trigger to TRIGGER_EXPOSURE")
         self.control_device.timing_mode = self.TimingMode.TRIGGER_EXPOSURE
-        print("Set frames per trigger to 1")
+        self._log.debug("Set frames per trigger to 1")
         self.control_device.frames = 1  # crashes here
-        print(f"Set triggers to {triggers}")
+        self._log.debug(f"Set triggers to {triggers}")
         self.control_device.triggers = triggers
+        self._log.debug("leaving PrepareOne")
 
     def LoadOne(self, axis, value, repetitions, latency):
         pass
 
     def StartOne(self, axis, value=None):
         """acquire the specified counter"""
-        print("Called StartOne")
+        self._log.debug("Called StartOne")
         self.control_device.start_acquire()
-        sleep(0.75)
+        self._log.debug("sleep 1sec")
+        sleep(1)
+        self._log.debug("awake")
+        self._log.debug("Leaving StartOne")
 
     def StopOne(self, axis):
         """Stop the specified counter"""
-        print("Called StopOne")
+        self._log.debug("Called StopOne")
         self.control_device.stop_acquire()
 
     def AbortOne(self, axis):
         """Abort the specified counter"""
-        print("Called AbortOne")
+        self._log.debug("Called AbortOne")
         self.control_device.stop_acquire()
 
     def GetAxisPar(self, axis, par):
-        print("Called GetAxisPar")
+        self._log.debug("Called GetAxisPar")
         if par == "shape":
             return [400, 400]
