@@ -12,7 +12,7 @@ from sardana import State
 # ReadWrite = DataAccess.ReadWrite
 
 
-class MOENCHTangoTwoDController(TwoDController):
+class MOENCHTangoTwoDControllerZMQ(TwoDController):
     "This class is the Tango Sardana Two D controller for the MOENCH PSI"
     # ctrl_properties = {
     #     "controlMOENCHTangoFQDN": {
@@ -152,7 +152,7 @@ class MOENCHTangoTwoDController(TwoDController):
     def __init__(self, inst, props, *args, **kwargs):
         """Constructor"""
         TwoDController.__init__(self, inst, props, *args, **kwargs)
-        self._log.debug("MOENCHTangoTwoDController Initialization ...")
+        self._log.debug("MOENCHTangoTwoDControllerZMQ Initialization ...")
         self.control_device = DeviceProxy("rsxs/moenchControl/bchip286")
         self.zmq_server = DeviceProxy("rsxs/moenchZmqServer/bchip286")
         self._log.debug("Ping device...")
@@ -253,7 +253,7 @@ class MOENCHTangoTwoDController(TwoDController):
         self._log.debug("Called StartAll")
         self.control_device.start_acquire()
         self._log.debug("sleep 1sec")
-        sleep(1)
+        sleep(3)
         self._log.debug("awake")
         self._log.debug("Leaving StartOne")
 
