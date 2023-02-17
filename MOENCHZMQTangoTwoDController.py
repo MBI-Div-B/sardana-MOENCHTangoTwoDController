@@ -12,7 +12,7 @@ from sardana import State
 # ReadWrite = DataAccess.ReadWrite
 
 
-class MOENCHTangoTwoDControllerZMQ(TwoDController):
+class MOENCHZMQTangoTwoDController(TwoDController):
     "This class is the Tango Sardana Two D controller for the MOENCH detector using the own zmq processing server"
 
     class TimingMode(IntEnum):
@@ -23,11 +23,11 @@ class MOENCHTangoTwoDControllerZMQ(TwoDController):
     def __init__(self, inst, props, *args, **kwargs):
         """Constructor"""
         TwoDController.__init__(self, inst, props, *args, **kwargs)
-        self._log.debug("MOENCHTangoTwoDControllerZMQ Initialization ...")
+        self._log.debug("MOENCHZMQTangoTwoDController Initialization ...")
         self.control_device = DeviceProxy("rsxs/moenchControl/bchip286")
-        self._log.debug(f"Control device state is {self.control_device.state()}")
+        # self._log.debug(f"Control device state is {self.control_device.state()}")
         self.zmq_server = DeviceProxy("rsxs/moenchZmqServer/bchip286")
-        self._log.debug(f"ZMQ server state is {self.zmq_server.state()}")
+        # self._log.debug(f"ZMQ server state is {self.zmq_server.state()}")
         self.REPETITION_RATE = 100  # in Hz
         self.stored_triggers = 1
         self.stored_frames = 1
@@ -138,7 +138,6 @@ class MOENCHTangoTwoDControllerZMQ(TwoDController):
         self._log.debug("Called StartAll")
         self.control_device.start_acquire()
         # some time is required for the hardware detector to be ready
-        sleep(0.1)
         self._log.debug("Leaving StartOne")
 
     def StopOne(self, axis):
