@@ -154,9 +154,8 @@ class MOENCHTangoTwoDController(TwoDController, Referable):
         """Constructor"""
         TwoDController.__init__(self, inst, props, *args, **kwargs)
         self._log.debug("MOENCHTangoTwoDController Initialization ...")
+        # set device tango address here
         self.control_device = DeviceProxy("rsxs/moenchControl/bchip286")
-        self._log.debug("Ping device...")
-        self._log.debug("SUCCESS")
         self._axes = {}
 
     def AddDevice(self, axis):
@@ -196,22 +195,24 @@ class MOENCHTangoTwoDController(TwoDController, Referable):
             tup = (DevState.MOVING, "Camera acquiring")
         self._log.debug(f"tup = {tup}")
         return tup
-        
 
     def PrepareOne(self, axis, value, repetitions, latency, nb_starts):
         """
         value is a exposure in sec
-        we need to set only up amount of triggers, TRIGGER_EXPOSURE mode and only 1 frame per trigger
+        for an continuous exposure with a period tau we need to set the amount
+        of frames N, where N = value/tau
         detectormode will not be changed
         """
         self._log.debug("Called PrepareOne")
-        triggers = int(value * 100)
-        self._log.debug("Set trigger to TRIGGER_EXPOSURE")
-        self.control_device.timing_mode = self.TimingMode.TRIGGER_EXPOSURE
-        self._log.debug("Set frames per trigger to 1")
-        self.control_device.frames = 1  # crashes here
-        self._log.debug(f"Set triggers to {triggers}")
-        self.control_device.triggers = triggers
+        # acquisition period in sec
+        tau = self.control_device.period
+        frames = int(value / tau)
+        self._log.debug("Set trigger to AUTO_TIMING")
+        self.control_device.timing_mode = self.TimingMode.AUTO_TIMING
+        self._log.debug("Set triggers to 1")
+        self.control_device.triggers = 1
+        self._log.debug(f"Set frames to {frames}")
+        self.control_device.frames = frames
         self._log.debug("leaving PrepareOne")
 
     def LoadOne(self, axis, value, repetitions, latency):
