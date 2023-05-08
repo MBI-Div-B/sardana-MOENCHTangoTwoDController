@@ -155,7 +155,7 @@ class MOENCHTangoTwoDController(TwoDController, Referable):
         TwoDController.__init__(self, inst, props, *args, **kwargs)
         self._log.debug("MOENCHTangoTwoDController Initialization ...")
         # set device tango address here
-        self.control_device = DeviceProxy("rsxs/moenchControl/bchip286")
+        self.control_device = DeviceProxy("rsxs/moenchControl/virtual")
         self._axes = {}
 
     def AddDevice(self, axis):
