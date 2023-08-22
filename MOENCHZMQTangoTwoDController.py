@@ -137,8 +137,18 @@ class MOENCHZMQTangoTwoDController(TwoDController):
     def StartAll(self):
         self._log.debug("Called StartAll")
         self.control_device.start_acquire()
+        # since the sardana does not await the initial state change from ON to MOVING
+        # in the StartAll/StartOne execution block we need to ensure that the detector is really ready
+        # before the StartAll() of the next device (i.e. PiLC) is being called
+        # probably this bug did not appear before because the sardana internal refresh rate was lower
+        # and the detector managed to be ready within this time step
+        while (
+            self.control_device.detector_status != DevState.STANDBY
+            or self.zmq_server.state() != DevState.RUNNING
+        ):
+            sleep(0.1)
         # some time is required for the hardware detector to be ready
-        self._log.debug("Leaving StartOne")
+        self._log.debug("Leaving StartAll")
 
     def StopOne(self, axis):
         """Stop the specified counter"""
