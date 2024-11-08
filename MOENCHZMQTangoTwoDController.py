@@ -24,9 +24,9 @@ class MOENCHZMQTangoTwoDController(TwoDController):
         """Constructor"""
         TwoDController.__init__(self, inst, props, *args, **kwargs)
         self._log.debug("MOENCHZMQTangoTwoDController Initialization ...")
-        self.control_device = DeviceProxy("rsxs/moenchControl/bchip286")
+        self.control_device = DeviceProxy("rsxs/moenchControl/bchip529")
         # self._log.debug(f"Control device state is {self.control_device.state()}")
-        self.zmq_server = DeviceProxy("rsxs/moenchZmqServer/bchip286")
+        self.zmq_server = DeviceProxy("rsxs/moenchZmq/bchip529")
         # self._log.debug(f"ZMQ server state is {self.zmq_server.state()}")
         self.REPETITION_RATE = 100  # in Hz
         self.stored_triggers = 1
@@ -57,45 +57,48 @@ class MOENCHZMQTangoTwoDController(TwoDController):
     def SetAxisPar(self, axis, parameter, value):
         pass
 
-    # self.control_device.detector_status corresponds to
-    # status_dict = {
-    #     runStatus.IDLE: DevState.ON, -> ready
-    #     runStatus.ERROR: DevState.FAULT,
-    #     runStatus.WAITING: DevState.STANDBY, -> waiting for triggers
-    #     runStatus.RUN_FINISHED: DevState.ON,
-    #     runStatus.TRANSMITTING: DevState.RUNNING,
-    #     runStatus.RUNNING: DevState.RUNNING, -> acquiring
-    #     runStatus.STOPPED: DevState.ON,
-    # }
-
-    # zmq server corresponds to
-    # if acquiring -> DevState.RUNNING
-    # if ready -> DevState.ON
-
     def StateAll(self):
         self._log.debug("Called StateAll")
 
     def StateOne(self, axis):
-        """Get the specified counter state"""
-        self._log.debug(f"Called StateOne on axis {axis}")
-        detector_state = self.control_device.detector_status
+        # """Get the specified counter state"""
+        # self._log.debug(f"Called StateOne on axis {axis}")
+        # detector_state = self.control_device.detector_status
+        # zmq_server_state = self.zmq_server.state()
+        # tup = (DevState.FAULT, "Unknown default state")
+        # self._log.debug(f"detector state: {detector_state}")
+        # self._log.debug(f"zmq server state: {zmq_server_state}")
+        # if detector_state == DevState.ON and zmq_server_state == DevState.ON:
+        #     tup = (DevState.ON, "Camera ready")
+        # elif detector_state == DevState.FAULT or zmq_server_state == DevState.FAULT:
+        #     tup = (DevState.FAULT, "Camera and/or zmq server in FAULT state")
+        # elif (
+        #     detector_state == DevState.STANDBY and zmq_server_state == DevState.RUNNING
+        # ):
+        #     tup = (DevState.MOVING, "Camera is waiting for trigger")
+        # elif detector_state == DevState.MOVING or zmq_server_state == DevState.RUNNING:
+        #     tup = (
+        #         DevState.MOVING,
+        #         "Camera acquiring and/or zmq server process the data",
+        #     )
+        # self._log.debug(f"tup = {tup}")
+        detector_state = self.control_device.state()
         zmq_server_state = self.zmq_server.state()
 
-        self._log.debug(f"detector state: {detector_state}")
-        self._log.debug(f"zmq server state: {zmq_server_state}")
-        if detector_state == DevState.ON and zmq_server_state == DevState.ON:
-            tup = (DevState.ON, "Camera ready")
-        elif detector_state == DevState.FAULT or zmq_server_state == DevState.FAULT:
-            tup = (DevState.FAULT, "Camera and/or zmq server in FAULT state")
-        elif (
-            detector_state == DevState.STANDBY and zmq_server_state == DevState.RUNNING
-        ):
-            tup = (DevState.MOVING, "Camera is waiting for trigger")
-        elif detector_state == DevState.MOVING or zmq_server_state == DevState.RUNNING:
-            tup = (
-                DevState.MOVING,
-                "Camera acquiring and/or zmq server process the data",
-            )
+        if detector_state is DevState.ON and zmq_server_state is DevState.ON:
+            tup = (DevState.ON, "Detector and MOENCHZMQ ready")
+        elif detector_state is DevState.MOVING and zmq_server_state is DevState.RUNNING:
+            tup = (DevState.MOVING, "Acquisition runs...")
+        elif detector_state is DevState.ON and zmq_server_state is DevState.RUNNING:
+            tup = (DevState.MOVING, "Detector is ready, wait for MOENCHZMQ")
+            # detector has finished, send the command to zmq device
+            # be sure that there is no last frame which did not come to moenchzmq after the detector has finished
+            sleep(0.1)
+            self.zmq_server.stop_receiver()
+        else:
+            # for example detector_state is DevState.MOVING and zmq_server_state is DevState.ON
+            # or any other malfunction
+            tup = (DevState.FAULT, f"Not correct states!\nDetector {detector_state}; MOENCHZMQ {zmq_server_state}")
         self._log.debug(f"tup = {tup}")
         return tup
 
@@ -136,18 +139,8 @@ class MOENCHZMQTangoTwoDController(TwoDController):
 
     def StartAll(self):
         self._log.debug("Called StartAll")
+        self.zmq_server.start_receiver()
         self.control_device.start_acquire()
-        # since the sardana does not await the initial state change from ON to MOVING
-        # in the StartAll/StartOne execution block we need to ensure that the detector is really ready
-        # before the StartAll() of the next device (i.e. PiLC) is being called
-        # probably this bug did not appear before because the sardana internal refresh rate was lower
-        # and the detector managed to be ready within this time step
-        while (
-            self.control_device.detector_status != DevState.STANDBY
-            or self.zmq_server.state() != DevState.RUNNING
-        ):
-            sleep(0.1)
-        # some time is required for the hardware detector to be ready
         self._log.debug("Leaving StartAll")
 
     def StopOne(self, axis):
@@ -163,7 +156,7 @@ class MOENCHZMQTangoTwoDController(TwoDController):
     def AbortAll(self):
         self._log.debug(f"Called AbortAll")
         self.control_device.stop_acquire()
-        self.zmq_server.abort_receiver()
+        self.zmq_server.stop_receiver()
 
     def GetAxisPar(self, axis, par):
         self._log.debug("Called GetAxisPar")
