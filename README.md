@@ -9,8 +9,7 @@ This sardana device is the highest API to control a MOENCH detector. This device
 ### Dependencies
 
 * `pytango 9`
-* [moenchControl TangoDS](https://github.com/lrlunin/pytango-moenchDetector)
-* [moenchZmqServer TangoDS](https://github.com/lrlunin/pytango-moenchZmqServer)
+* [tango-moench devices](https://github.com/lrlunin/tango-moench)
 
 ## Getting Started
 The sardana device has 6 axes. Different image processing algorithm corresponds to each axis:
